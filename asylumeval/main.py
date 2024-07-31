@@ -126,7 +126,7 @@ def visualize_experiment(maps: dict[str, sidpy.sid.Dataset], **kwargs
     return view.fig
 
 
-def load_and_visualize(filepath: str):
+def load_and_visualize(filepath: str) -> plt.Figure:
     """Load ARHDF5 file and visualize spectra.
 
     This method assumes the ARHDF5 file consists of a list of spectral datasets
@@ -135,28 +135,45 @@ def load_and_visualize(filepath: str):
 
     Args:
         filepath: full path of filename to load.
+
+    Returns:
+        plt.Figure object of created pyplot figure.
     """
-
     maps = create_dset_map_from_arhdf5_file(filepath)
-    fig = visualize_experiment(maps)
-    plt.show(block=True)
+    return visualize_experiment(maps)
 
 
-def init_logging():
+def init_logging(log_level_str: str):
     color_formatter = ColoredFormatter(
         '%(asctime)s | %(name)s | '
         '%(log_color)s%(levelname)s%(reset)s:%(lineno)s | '
         '%(log_color)s%(message)s%(reset)s')
 
-    logger.setLevel(logging.DEBUG)
+    log_level = getattr(logging, log_level_str.upper())
+    logger.setLevel(log_level)
 
     handler = logging.StreamHandler(sys.stderr)
-    handler.setLevel(logging.DEBUG)
+    handler.setLevel(log_level)
     handler.setFormatter(color_formatter)
     logger.addHandler(handler)
 
 
-if __name__ == '__main__':
+def cli_load_and_visualize(filepath: str, log_level: str = 'INFO'):
+    """Load ARHDF5 file and visualize spectra.
+
+    This method assumes the ARHDF5 file consists of a list of spectral datasets
+    which have been collected over a 2D image. It loads them, normalizes the
+    'Deflection' channels, and visualizes them all in one UI.
+
+    Args:
+        filepath: full path of filename to load.
+        log_level: log level as string.
+    """
     #plt.ion()  # for interactive usage
-    init_logging()
-    fire.Fire(load_and_visualize)
+    init_logging(log_level)
+    fig = load_and_visualize(filepath)
+    plt.show(block=True)
+
+
+if __name__ == '__main__':
+    fire.Fire(cli_load_and_visualize)
