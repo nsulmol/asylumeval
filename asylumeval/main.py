@@ -7,7 +7,6 @@ from colorlog import ColoredFormatter
 import sidpy
 import SciFiReaders as sr
 import numpy as np
-from matplotlib.figure import Figure
 import fire
 import matplotlib.pyplot as plt
 
@@ -92,7 +91,6 @@ def get_init_const_end_indices(ds: sidpy.sid.Dataset) -> np.array:
         np.array of shape [NxMx1], where the last dimension contains the end
             index values before the spectroscopic data stops being constant.
     """
-
     grad = np.gradient(ds, axis=2)
     return (grad != 0).argmax(axis=2)  # Get first True of each in 2D arr
 
@@ -110,37 +108,10 @@ def normalize_dataset(ds: sidpy.sid.Dataset, indices: tuple[int]
     Returns:
         sidpy.sid.Dataset with values normalized.
     """
-
     mean = np.mean(ds[:, :, indices[0]:indices[1]], axis=2)
     # expand to (NxMx1) for broadcasting
     mean = mean.reshape(mean.shape + (1,))
     return ds - mean
-
-
-def visualize_experiment(maps: dict[str, sidpy.sid.Dataset], **kwargs
-                         ) -> Figure:
-    """Creates an ExperimentVisualizer and returns the associated figure."""
-
-    dsets = list(maps.values())
-    view = visualizer.ExperimentVisualizer(dsets, **kwargs)
-    return view.fig
-
-
-def load_and_visualize(filepath: str) -> plt.Figure:
-    """Load ARHDF5 file and visualize spectra.
-
-    This method assumes the ARHDF5 file consists of a list of spectral datasets
-    which have been collected over a 2D image. It loads them, normalizes the
-    'Deflection' channels, and visualizes them all in one UI.
-
-    Args:
-        filepath: full path of filename to load.
-
-    Returns:
-        plt.Figure object of created pyplot figure.
-    """
-    maps = create_dset_map_from_arhdf5_file(filepath)
-    return visualize_experiment(maps)
 
 
 def init_logging(log_level_str: str):
@@ -158,7 +129,8 @@ def init_logging(log_level_str: str):
     logger.addHandler(handler)
 
 
-def cli_load_and_visualize(filepath: str, log_level: str = 'INFO'):
+def cli_load_and_visualize(filepath: str, log_level: str = 'INFO',
+                           **kwargs):
     """Load ARHDF5 file and visualize spectra.
 
     This method assumes the ARHDF5 file consists of a list of spectral datasets
@@ -171,7 +143,9 @@ def cli_load_and_visualize(filepath: str, log_level: str = 'INFO'):
     """
     #plt.ion()  # for interactive usage
     init_logging(log_level)
-    fig = load_and_visualize(filepath)
+
+    maps = create_dset_map_from_arhdf5_file(filepath)
+    viz = visualizer.ExperimentVisualizer(list(maps.values()), **kwargs)
     plt.show(block=True)
 
 
