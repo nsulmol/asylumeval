@@ -76,11 +76,13 @@ class ExperimentVisualizer(object):
         self.set_image(**kwargs)
         self._visualize_spectra()
 
-        # Hookup callback for clicking on GUI (need to update spectra)
-        self.cid = self.fig.canvas.mpl_connect('button_press_event',
-                                               self._onclick)
         if scale_bar:
             self._scale_bar()
+
+        # Hookup callback for clicking on GUI (need to update spectra)
+        self.cid = self.fig.canvas.mpl_connect('button_press_event',
+                                               #yell)
+                                               self._onclick)
 
     def verify_dataset(self):
         dsets = self.dsets
@@ -177,6 +179,7 @@ class ExperimentVisualizer(object):
             self.dset._axes[self.image_dims[0]].quantity, 'px'))
         self.axes[0].set_ylabel('{} [{}]'.format(
             self.dset._axes[self.image_dims[1]].quantity, 'px'))
+
         # Place a rectangle indicating the bin we are on.
         self.rect = patches.Rectangle((0, 0), self.bin_x, self.bin_y,
                                       linewidth=1, edgecolor='r',
@@ -184,17 +187,17 @@ class ExperimentVisualizer(object):
         self.axes[0].add_patch(self.rect)
 
     def _visualize_spectra(self):
-        """Visualize all spectra."""
-        # Iterate through datasets and UI 'axes' (skipping first axis, as it
-        # is the base image).
-        logger.debug(f'self.axes: {self.axes}')
-        logger.debug(f'self.axes[1::]: {self.axes[1::]}')
+        """Visualize all spectra.
+
+        Iterate through datasets and UI 'axes' (skipping first axis, as it
+        is the base image).
+        """
         for dset, axis, energy_axis, energy_scale in zip(self.dsets,
                                                          self.axes[1::],
                                                          self.energy_axes,
                                                          self.energy_scales):
             self._visualize_spectrum(axis, dset, energy_axis, energy_scale)
-        self.fig.tight_layout()
+        #self.fig.tight_layout()
         self.fig.canvas.draw_idle()
 
     def _visualize_spectrum(self, axis: Axes, dset: sidpy.sid.Dataset,
@@ -211,12 +214,6 @@ class ExperimentVisualizer(object):
         # Clear axis before re-drawing
         axis.clear()
         spectrum, variance = self.get_spectrum_variance(dset)
-
-        logger.debug(f'spectrum: {spectrum}')
-        logger.debug(f'variance: {variance}')
-        logger.debug(f'spectrum shape: {spectrum.shape}')
-        logger.debug(f'energy_scale: {energy_scale}')
-        logger.debug(f'len energy_scale: {len(energy_scale)}')
 
         # Transpose if necessary
         if len(energy_scale) != spectrum.shape[0]:
@@ -248,57 +245,6 @@ class ExperimentVisualizer(object):
         axis.set_xlabel(dset.labels[energy_axis])  # + x_suffix)
         axis.set_ylabel(dset.data_descriptor)
         axis.ticklabel_format(style='sci', scilimits=(-2, 3))
-
-    def _update_image(self, event_value):
-        #pixel wise or unit wise listener
-        if event_value==1:
-            self.axes[0].set_xticks(np.linspace(self.extent[0], self.extent[1], 5))
-            self.axes[0].set_xticklabels(np.round(np.linspace(self.extent[0], self.extent[1], 5),2))
-
-            self.axes[0].set_yticks(np.linspace(self.extent[2], self.extent[3], 5))
-            self.axes[0].set_yticklabels(np.round(np.linspace(self.extent[2], self.extent[3], 5),2))
-
-            self.axes[0].set_xlabel('{} [{}]'.format(self.dset._axes[self.image_dims[0]].quantity,
-                                                     'px'))
-            self.axes[0].set_ylabel('{} [{}]'.format(self.dset._axes[self.image_dims[1]].quantity,
-                                                         'px'))
-        else:
-            self.axes[0].set_xlabel('{} [{}]'.format(self.dset._axes[self.image_dims[0]].quantity,
-                                                     self.dset._axes[self.image_dims[0]].units))
-            self.axes[0].set_ylabel('{} [{}]'.format(self.dset._axes[self.image_dims[1]].quantity,
-                                                            self.dset._axes[self.image_dims[1]].units))
-
-            if not self.line_scan:
-                self.axes[0].set_xticks(np.linspace(self.extent[0], self.extent[1], 5),)
-                self.axes[0].set_xticklabels(np.round(np.linspace(self.extent_rd[0], self.extent_rd[1], 5), 2))
-
-                self.axes[0].set_yticks(np.linspace(self.extent[2], self.extent[3], 5),)
-                self.axes[0].set_yticklabels(np.round(np.linspace(self.extent_rd[2], self.extent_rd[3], 5), 2))
-
-                self.axes[0].set_ylabel('{} [{}]'.format(self.dset._axes[self.image_dims[1]].quantity,
-                                                                self.dset._axes[self.image_dims[1]].units))
-
-            self.axes[0].set_xlabel('{} [{}]'.format(self.dset._axes[self.image_dims[0]].quantity,
-                                                        self.dset._axes[self.image_dims[0]].units))
-
-
-            if self.dset._axes[self.image_dims[0]].units =='m':
-                scaled_values_y = self.dset._axes[self.image_dims[1]].values*1E9
-                scaled_values_x = self.dset._axes[self.image_dims[0]].values*1E9
-                if scaled_values_x.mean() >=0.1 and  scaled_values_x.mean() <=1000:
-                    self.axes[0].set_xticks(np.linspace(self.extent[0], self.extent[1], 5),)
-                    self.axes[0].set_xticklabels(np.round(np.linspace(scaled_values_x[0], scaled_values_x[-1], 5), 2))
-
-                    self.axes[0].set_yticks(np.linspace(self.extent[2], self.extent[3], 5),)
-                    self.axes[0].set_yticklabels(np.round(np.linspace(scaled_values_y[0], scaled_values_y[-1], 5), 2))
-
-                    self.axes[0].set_xlabel('{} [{}]'.format(self.dset._axes[self.image_dims[0]].quantity,
-                                                        'nm'))
-
-                    self.axes[0].set_ylabel('{} [{}]'.format(self.dset._axes[self.image_dims[1]].quantity,
-                                                            'nm'))
-
-        return
 
     def get_spectrum_variance(self, dset: sidpy.sid.Dataset
                               ) -> (np.array, np.array):
@@ -341,10 +287,8 @@ class ExperimentVisualizer(object):
 
     def _onclick(self, event):
         """Update visualizations if the selected image bin has changed."""
-        logger.debug('Entering _onclick')
-
         self.event = event
-        if event.inaxes in [self.axes[0]]:
+        if event.inaxes == self.axes[0]:
             x = int(event.xdata)
             y = int(event.ydata)
 
@@ -364,7 +308,6 @@ class ExperimentVisualizer(object):
                     self.rect.set_xy([self.x * self.rect.get_width() / self.bin_x + self.rectangle[0],
                                       self.y * self.rect.get_height() / self.bin_y + self.rectangle[2]])
             self._visualize_spectra()
-        logger.debug('Exiting _onclick')
 
     def set_legend(self, set_legend):
         self.plot_legend = set_legend
@@ -404,6 +347,32 @@ class ExperimentVisualizer(object):
                                    size_vertical=size_of_bar / 7)
 
         self.axes[0].add_artist(scalebar)
+
+    def set_bin(self, bin_xy):
+        old_bin_x = self.bin_x
+        old_bin_y = self.bin_y
+        if isinstance(bin_xy, list):
+            self.bin_x = int(bin_xy[0])
+            self.bin_y = int(bin_xy[1])
+        else:
+            self.bin_x = int(bin_xy)
+            self.bin_y = int(bin_xy)
+
+        if self.bin_x > self.dset.shape[self.image_dims[0]]:
+            self.bin_x = self.dset.shape[self.image_dims[0]]
+        if self.bin_y > self.dset.shape[self.image_dims[1]]:
+            self.bin_y = self.dset.shape[self.image_dims[1]]
+
+        self.rect.set_width(self.rect.get_width() * self.bin_x / old_bin_x)
+        self.rect.set_height((self.rect.get_height() * self.bin_y / old_bin_y))
+        if self.x + self.bin_x > self.dset.shape[self.image_dims[0]]:
+            self.x = self.dset.shape[0] - self.bin_x
+        if self.y + self.bin_y > self.dset.shape[self.image_dims[1]]:
+            self.y = self.dset.shape[1] - self.bin_y
+
+        self.rect.set_xy([self.x * self.rect.get_width() / self.bin_x + self.rectangle[0],
+                          self.y * self.rect.get_height() / self.bin_y + self.rectangle[2]])
+        self._visualize_spectra()
 
     @staticmethod
     def _closest_point(array_coord, point):
