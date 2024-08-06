@@ -114,6 +114,36 @@ def normalize_dataset(ds: sidpy.sid.Dataset, indices: tuple[int]
     return ds - mean
 
 
+def compute_relationships(maps: dict[str, sidpy.sid.Dataset]
+                          ) -> dict[str, sidpy.sid.Dataset]:
+    """Compute Force vs. Bias and Current vs. Bias curve.
+
+    Args:
+        maps: dictionary of sidpy Datasets.
+
+    Returns:
+        dictionary of sidpy datasets, where we have replaced the original
+            datasets with:
+            - A force vs. bias 'spectroscopy'.
+            - A current vs. bias 'spectroscopy.
+    """
+    defl = maps[DEFL_KEY]  # 'Force'
+    bias = maps[BIAS_KEY]
+    current = maps[CURR_KEY]
+
+    dim = sidpy.sid.Dimension(bias[0][0], name=bias.name,
+                              quantity=bias.quantity, units=bias.units,
+                              dimension_type=sidpy.sid.DimensionType.SPECTRAL)
+
+    force_bias = defl.copy()  # deep copy
+    force_bias.set_dimension(2, dim)
+    current_bias = current.copy()  # deep copy
+    current_bias.set_dimension(2, dim)
+
+    new_map = {'Force-Bias': force_bias, 'Current-Bias': current_bias}
+    return new_map
+
+
 def init_logging(log_level_str: str):
     color_formatter = ColoredFormatter(
         '%(asctime)s | %(name)s | '
@@ -145,6 +175,9 @@ def cli_load_and_visualize(filepath: str, log_level: str = 'INFO',
     init_logging(log_level)
 
     maps = create_dset_map_from_arhdf5_file(filepath)
+
+    maps = compute_relationships(maps)
+
     viz = visualizer.ExperimentVisualizer(list(maps.values()), **kwargs)
     plt.show(block=True)
 
