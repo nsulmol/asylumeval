@@ -3,6 +3,7 @@
 import sidpy
 import numpy as np
 from math import ceil
+from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
@@ -12,17 +13,36 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-PLOTS_PER_ROW_COL = 3
+PLOTS_PER_ROW = 3
 SPECTRA_ALPHA = 0.3
 RECT_ALPHA = 0.2
 
 
 class ExperimentVisualizer(object):
-    """Interactive visualizer of spectroscopic collection."""
+    """Interactive visualizer of spectroscopic collection.
 
+    This was hacked up based on sidpy's SpectraImageVisualizer.
+
+    Attributes:
+        fig: the figure we are drawing on.
+        image_dims: the image dimensions.
+        energy_axes: the axes of each spectroscopic dataset.
+        dsets: the list of sidpy.sid.Datasets we are visualizing.
+        dset: the first dataset, used for ease of reusing existing code.
+        horizontal: whether we want to visualize the plots 'horizontally',
+            or 'vertically'. Modifies rows and cols.
+        x: topographic x-position of the spectra we are currently visualizing.
+        y: topographic y-position of the spectra we are currently visualizing.
+        bin_x: binning amount, used to downsample (I think).
+        bin_y: binning amount, used to downsample (I think).
+        line_scan: I'm not sure what this is, from original code.
+        axes: the (flattened) list of Axes corresponding to the image and
+            spectroscopic data we are visualizing.
+    """
     def __init__(self, dsets: list[sidpy.sid.Dataset], figure=None,
-                 horizontal=True, **kwargs):
-
+                 horizontal=False, fancy_grid=True,
+                 plots_per_row=PLOTS_PER_ROW, **kwargs):
+        """Initialize our object."""
         dset_img_shape = dsets[0].shape[0:2]
         dset_ndim = dsets[0].ndim
         for dset in dsets:
@@ -62,13 +82,9 @@ class ExperimentVisualizer(object):
 
         self.set_dataset()
 
-        # Determine # of rows/cols
-        self.nrows_cols = ceil((len(dsets) + 1) / PLOTS_PER_ROW_COL)
-
-        nrows = self.nrows_cols if horizontal else PLOTS_PER_ROW_COL
-        ncols = PLOTS_PER_ROW_COL if horizontal else self.nrows_col
-        self.axes = self.fig.subplots(nrows=nrows, ncols=ncols, **fig_args)
-        self.axes = self.axes.flatten()  # make 1D for ease of access
+        self.axes = self._create_axes(dsets, self.fig, horizontal,
+                                      fancy_grid, plots_per_row,
+                                      **fig_args)
 
         if self.set_title:
             self.fig.canvas.manager.set_window_title(self.dset.title)
@@ -81,8 +97,114 @@ class ExperimentVisualizer(object):
 
         # Hookup callback for clicking on GUI (need to update spectra)
         self.cid = self.fig.canvas.mpl_connect('button_press_event',
-                                               #yell)
                                                self._onclick)
+
+    def _create_axes(self, dsets: list[sidpy.sid.Dataset], fig: Figure,
+                     horizontal: bool, fancy_grid: bool,
+                     plots_per_row: int, **fig_args) -> list[Axes]:
+        """Create the axes as needed."""
+        if fancy_grid:
+            return self._create_axes_fancy(dsets, fig, horizontal,
+                                           plots_per_row, **fig_args)
+        return self._create_axes_simple(dsets, fig, horizontal,
+                                        plots_per_row, **fig_args)
+
+    @staticmethod
+    def _create_axes_simple(dsets: list[sidpy.sid.Dataset], fig: Figure,
+                            horizontal: bool, plots_per_row: int,
+                            **fig_args) -> list[Axes]:
+        """Creates an nxm subplot figure for plotting purposes.
+
+        This creates a simple nxm grid for plotting, making no real distinction
+        between the image plot and the spectroscopic plots. It decides on the
+        number of rows/cols based on the desired number of plots_per_row, and
+        does not remove excess ones. So the visualization is a little bit crude.
+
+        Args:
+            dsets: list of sidpy.sid.Datasets which we will be using to
+                plot.
+            fig: the matplotlib Figure which we will create subplots on.
+            horizontal: whether to display in horizontal or vertical mode.
+            plots_per_row: the amount of datasets to plot for a given row
+                (or column if in vertical mode).
+            **fig_args: other arguments fed to the subplots() call.
+
+        Returns:
+            The list of created matplotlib Axes.
+        """
+        # Determine # of rows/cols and create initial subplots
+        nrows = ceil((len(dsets) + 1) / plots_per_row)
+        rows_cols = np.array([nrows, plots_per_row])
+
+        if horizontal:
+            rows_cols = rows_cols[::-1]  # Flip
+
+        axes = fig.subplots(nrows=rows_cols[0], ncols=rows_cols[1],
+                            **fig_args)
+        return axes.flatten()
+
+    @staticmethod
+    def _create_axes_fancy(dsets: list[sidpy.sid.Dataset], fig: Figure,
+                           horizontal: bool, plots_per_row: int,
+                           **fig_args) -> list[Axes]:
+        """Creates a (more involved) nxm subplot figure for plotting purposes.
+
+        This is a more involved subplotting routine (based off of
+        _create_axes_simple), where we:
+        - Set up a full row/col for the image plot;
+        - Remove extra figures after we create the full grid, so the
+        visualization is a bit cleaner.
+
+        Args:
+            dsets: list of sidpy.sid.Datasets which we will be using to
+                plot.
+            fig: the matplotlib Figure which we will create subplots on.
+            horizontal: whether to display in horizontal or vertical mode.
+            plots_per_row: the amount of datasets to plot for a given row
+                (or column if in vertical mode).
+            **fig_args: other arguments fed to the subplots() call.
+
+        Returns:
+            The list of created matplotlib Axes.
+        """
+        # Determine # of rows/cols and create initial subplots
+        nrows = 1 + ceil(len(dsets) / plots_per_row)
+        extra_figs_count = plots_per_row * (nrows - 1) - len(dsets)
+        rows_cols = np.array([nrows, plots_per_row])
+
+        if horizontal:
+            rows_cols = rows_cols[::-1]  # Flip
+
+        axes = fig.subplots(nrows=rows_cols[0], ncols=rows_cols[1],
+                            **fig_args)
+
+        img_rows_cols = np.array([nrows, 1])
+        img_is = [0] * plots_per_row
+        img_js = list(range(0, plots_per_row))
+
+        if horizontal:
+            img_rows_cols = img_rows_cols[::-1]  # Flip
+            img_is, img_js = img_js, img_is  # Swap
+
+        axes_to_remove = []
+        # Get the rows/cols associated with the image (to be removed).
+        for i, j in zip(img_is, img_js):
+            axes_to_remove.append(axes[i, j])
+            axes[i, j].remove()
+        axes = [axis for axis in axes.flat if axis not in axes_to_remove]
+
+        # Remove extra figs
+        axes_to_remove = []
+        extra_axes = axes[::-1][0:extra_figs_count]
+        for ax in extra_axes:
+            axes_to_remove.append(ax)
+            ax.remove()
+        axes = [axis for axis in axes if axis not in axes_to_remove]
+
+        img_ax = fig.add_subplot(img_rows_cols[0], img_rows_cols[1], 1)
+        axes.insert(0, img_ax)
+
+        return axes
 
     def verify_dataset(self):
         dsets = self.dsets
@@ -193,7 +315,7 @@ class ExperimentVisualizer(object):
         is the base image).
         """
         for dset, axis, energy_axis, energy_scale in zip(self.dsets,
-                                                         self.axes[1::],
+                                                         self.axes[1:(1+len(self.dsets))],
                                                          self.energy_axes,
                                                          self.energy_scales):
             self._visualize_spectrum(axis, dset, energy_axis, energy_scale)
@@ -241,7 +363,6 @@ class ExperimentVisualizer(object):
 
         axis.set_xlim(axis.get_xlim())
         axis.set_ylim(axis.get_ylim())
-
         axis.set_xlabel(dset.labels[energy_axis])  # + x_suffix)
         axis.set_ylabel(dset.data_descriptor)
         axis.ticklabel_format(style='sci', scilimits=(-2, 3))
