@@ -6,6 +6,7 @@ from math import ceil
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.image import AxesImage
+from matplotlib.colorbar import Colorbar
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import logging
@@ -28,7 +29,7 @@ class SpectraStackVisualizer(object):
     - 'scale_bar=True' is supposed to visualize the scale data with a microscopy-like
         scale bar (with units) in the image. I'm not sure the scale is right
         currently...
-    - 'colorbar=True' will add a colorbar to the topographic graphs.
+    - 'color_bar=True' will add a colorbar to the topographic graphs.
 
     Attributes:
         fig: the figure we are drawing on.
@@ -46,6 +47,9 @@ class SpectraStackVisualizer(object):
         line_scan: I'm not sure what this is, from original code.
         axes: the (flattened) list of Axes corresponding to the image and
             spectroscopic data we are visualizing.
+        caxes: a list of Axes for colorbars, where the index should be
+            associated to that in self.axes. If an Axes does not have an
+            associated colorbar, it should be None.
     """
 
     def __init__(self, dsets: list[sidpy.sid.Dataset], figure=None,
@@ -62,8 +66,8 @@ class SpectraStackVisualizer(object):
             elif dset.ndim != dset_ndim:
                 raise TypeError('all dsets must have same image dimensions')
 
-        color_bar = kwargs.pop('color_bar', False)
-        scale_bar = kwargs.pop('scale_bar', False)
+        show_color_bar = kwargs.pop('color_bar', False)
+        show_scale_bar = kwargs.pop('scale_bar', False)
         self.set_title = kwargs.pop('set_title', True)
 
         fig_args = dict()
@@ -90,14 +94,16 @@ class SpectraStackVisualizer(object):
 
         self._verify_and_setup_dataset()
 
+        # Create axes and colorbar axes
         self.axes = self._create_axes(dsets, self.fig, horizontal,
                                       fancy_grid, plots_per_row,
                                       **fig_args)
+        self.caxes = [None] * len(self.axes)
 
         if self.set_title:
             self.fig.canvas.manager.set_window_title(self.dset.title)
 
-        self.set_selection_image(scale_bar, color_bar, **kwargs)
+        self.set_selection_image(show_scale_bar, show_color_bar, **kwargs)
         self._visualize_spectral_data()
 
         # Hookup callback for clicking on GUI (need to update spectra)
@@ -285,11 +291,6 @@ class SpectraStackVisualizer(object):
         if not self.line_scan:
             self.extent_rd = self.dset.get_extent(self.image_axes)
 
-        logger.error(f'Image Dims: {self.image_axes}')
-        logger.error(f'Energy Axes: {self.energy_axes}')
-        logger.error(f'Extent: {self.extent}')
-        logger.error(f'Extent RD: {self.extent_rd}')
-
     @staticmethod
     def _visualize_spectral_topography(axis: Axes,
                                        fig: Figure,
@@ -298,10 +299,11 @@ class SpectraStackVisualizer(object):
                                        extent: list[int],
                                        extent_rd: list[float],
                                        energy_axis: int,
-                                       scale_bar: bool,
-                                       color_bar: bool,
-                                       spectrum_idx: int = None,
-                                       **kwargs):
+                                       show_scale_bar: bool,
+                                       show_color_bar: bool,
+                                       cax: Axes = None,
+                                       spectrum_indices: list[int] = None,
+                                       **kwargs) -> Axes:
         """Create 'spectral topography' image from spectral data.
 
         Given a spectral dataset consisting of spectral data obtained over a 2D
@@ -320,30 +322,45 @@ class SpectraStackVisualizer(object):
             extent_rd: 4-val float list indicating extents of the topographic
                 data, in real units. Used for plotting purposes.
             energy_axis: the axes of the spectroscopic data.
-            spectrum_idx: spectrum image from which we create the 2D image.
-            scale_bar: whether or not to replace axes dimensions with a
+            spectrum_indices: spectrum indices from which we create the 2D
+                image.
+            show_scale_bar: whether or not to replace axes dimensions with a
                 single scale bar, drawn directly on the data (microscopy
                 standard).
-            color_bar: whether or not to show a colorbar on the side of
+            show_color_bar: whether or not to show a colorbar on the side of
                 the image, indicating the range of the z-dim data.
+            cax: the associated color_bar Axes (None if none existent).
             **kwargs: additional args to feed to the matplotlib plot method.
+
+        Returns:
+            colorbar Axes (either that provided or a newly created one, if the
+                settings demanded it be created).
         """
+        axis.clear()  # Clear before redrawing!
+
         # Create clickable image from first spectrum's mean image.
-        if spectrum_idx is None:
+        if spectrum_indices is None:
             image = dset.mean(axis=(energy_axis))
         else:
             # Get 2D image at spectrum slice! Using take() to grab a
             # slice along the energy axis, and then squeeze to squash
             # that dimension (that has size 1).
-            image = np.squeeze(np.take(dset, indices=[spectrum_idx],
-                                       axis=energy_axis))
+
+            # TODO: TEST
+            image = np.take(dset, indices=spectrum_indices,
+                            axis=energy_axis)
+            image = image.mean(axis=(energy_axis))
 
         ax_img = axis.imshow(image.T, extent=extent, **kwargs)
 
         # Handle colorbar
-        if create_color_bar:
-            create_color_bar(axis, fig, ax_img, dset)
-        if create_scale_bar:
+        if show_color_bar:
+            if cax is None:
+                cax = create_color_axes(axis)
+                create_color_bar(axis, fig, ax_img, dset)
+            else:
+                update_color_bar(cax, fig, ax_img, dset)
+        if show_scale_bar:
             create_scale_bar(axis, extent_rd, image_axes, dset)
 
         # If our 'image' is 1D instead of 2D, handle (not sure this will get
@@ -368,27 +385,24 @@ class SpectraStackVisualizer(object):
         axis.set_ylabel('{} [{}]'.format(
             dset._axes[image_axes[1]].quantity, 'px'))
 
-    def set_selection_image(self, scale_bar: bool,
-                            color_bar: bool, **kwargs):
+        return cax
+
+    def set_selection_image(self, show_scale_bar: bool,
+                            show_color_bar: bool, **kwargs):
         """Create image we will use to select data to display.
 
         Args:
-            scale_bar: whether or not to replace axes dimensions with a
+            show_scale_bar: whether or not to replace axes dimensions with a
                 single scale bar, drawn directly on the data (microscopy
                 standard).
-            color_bar: whether or not to show a colorbar on the side of
+            show_color_bar: whether or not to show a colorbar on the side of
                 the image, indicating the range of the z-dim data.
         """
-        self._visualize_spectral_topography(self.axes[0],
-                                            self.fig,
-                                            self.dsets[0],
-                                            self.image_axes,
-                                            self.extent,
-                                            self.extent_rd,
-                                            self.energy_axes[0],
-                                            create_scale_bar,
-                                            create_color_bar,
-                                            spectrum_idx=None, **kwargs)
+        self.caxes[0] = self._visualize_spectral_topography(
+            self.axes[0], self.fig, self.dsets[0], self.image_axes,
+            self.extent, self.extent_rd, self.energy_axes[0],
+            show_scale_bar, show_color_bar, self.caxes[0],
+            spectrum_indices=None, **kwargs)
 
         # Place a rectangle indicating the bin we are on.
         self.rect = patches.Rectangle((0, 0), self.bin_x, self.bin_y,
@@ -407,7 +421,6 @@ class SpectraStackVisualizer(object):
                 self.energy_axes, self.energy_scales):
             self._visualize_spectrum(axis, dset, energy_axis, energy_scale)
         # self.fig.tight_layout()
-        self.fig.canvas.draw_idle()
 
     def _visualize_spectrum(self, axis: Axes, dset: sidpy.sid.Dataset,
                             energy_axis: int, energy_scale: np.array):
@@ -484,6 +497,7 @@ class SpectraStackVisualizer(object):
             else:
                 selection.append(slice(0, 1))
 
+        # The mean here is over the binned data.
         spectrum = dset[tuple(selection)].mean(axis=tuple(self.image_axes))
 
         if dset.variance is not None:
@@ -497,31 +511,45 @@ class SpectraStackVisualizer(object):
         """Update visualizations if the selected image bin has changed."""
         self.event = event
 
-        # TODO: Remove when comfortable...
-        if ax := event.inaxes:
-            logger.debug(f'idx: {ax.figure.axes.index(ax)}, bounds: {ax._position.bounds}')
-            logger.debug(f'xdata: {event.xdata}, ydata: {event.ydata}')
-
         if event.inaxes == self.axes[0]:
-            x = int(event.xdata)
-            y = int(event.ydata)
-
-            x = int(x - self.rectangle[0])
-            y = int(y - self.rectangle[2])
-
-            if x >= 0 and y >= 0:
-                if x <= self.rectangle[1] and y <= self.rectangle[3]:
-                    self.x = int(x / (self.rect.get_width() / self.bin_x))
-                    self.y = int(y / (self.rect.get_height() / self.bin_y))
-
-                    if self.x + self.bin_x > self.dset.shape[self.image_axes[0]]:
-                        self.x = self.dset.shape[self.image_axes[0]] - self.bin_x
-                    if self.y + self.bin_y > self.dset.shape[self.image_axes[1]]:
-                        self.y = self.dset.shape[self.image_axes[1]] - self.bin_y
-
-                    self.rect.set_xy([self.x * self.rect.get_width() / self.bin_x + self.rectangle[0],
-                                      self.y * self.rect.get_height() / self.bin_y + self.rectangle[2]])
+            self._update_rect(event.xdata, event.ydata)
             self._visualize_spectral_data()
+            self.fig.canvas.draw_idle()
+
+    def _update_rect(self, x: float, y: float):
+        """Update self.rect based on provided x, y."""
+        # Reminder: self.rectangle are the dimensions of the image
+        # data as displayed. So we are ensuring our click is within
+        # this.
+
+        # Subtract origin of rectangle
+        x = int(x - self.rectangle[0])  # X-origin
+        y = int(y - self.rectangle[2])  # Y-origin
+
+        if x >= 0 and y >= 0:
+            if x <= self.rectangle[1] and y <= self.rectangle[3]:
+                # Convert to pixel values (divide by pixel size / # bins)
+                # (Reminder, self.rect is the current pixel we are
+                # showing). Don't worry about the binning for starters.
+                self.x = int(x / (self.rect.get_width() / self.bin_x))
+                self.y = int(y / (self.rect.get_height() / self.bin_y))
+
+                # TODO: Investigate!
+                # I think this is maybe a bug? I think they are trying to
+                # check if the values is larger than the max # pixels,
+                # accounting for bins. But in this case, wouldn't they want
+                # to do self.x * self.bin_x? And then divide by it instead
+                # of subtracct?
+                if self.x + self.bin_x > self.dset.shape[self.image_axes[0]]:
+                    self.x = self.dset.shape[self.image_axes[0]] - self.bin_x
+                if self.y + self.bin_y > self.dset.shape[self.image_axes[1]]:
+                    self.y = self.dset.shape[self.image_axes[1]] - self.bin_y
+
+                self.rect.set_xy(
+                    [self.x * self.rect.get_width() /
+                        self.bin_x + self.rectangle[0],
+                        self.y * self.rect.get_height() /
+                        self.bin_y + self.rectangle[2]])
 
     def set_legend(self, set_legend):
         self.plot_legend = set_legend
@@ -544,6 +572,7 @@ class SpectraStackVisualizer(object):
         if self.bin_y > self.dset.shape[self.image_axes[1]]:
             self.bin_y = self.dset.shape[self.image_axes[1]]
 
+        # TODO: Update rect dimensinos, put in own method?
         self.rect.set_width(self.rect.get_width() * self.bin_x / old_bin_x)
         self.rect.set_height((self.rect.get_height() * self.bin_y / old_bin_y))
         if self.x + self.bin_x > self.dset.shape[self.image_axes[0]]:
@@ -551,24 +580,44 @@ class SpectraStackVisualizer(object):
         if self.y + self.bin_y > self.dset.shape[self.image_axes[1]]:
             self.y = self.dset.shape[1] - self.bin_y
 
-        self.rect.set_xy([self.x * self.rect.get_width() / self.bin_x + self.rectangle[0],
-                          self.y * self.rect.get_height() / self.bin_y + self.rectangle[2]])
+        self.rect.set_xy(
+            [self.x * self.rect.get_width() / self.bin_x + self.rectangle[0],
+             self.y * self.rect.get_height() / self.bin_y + self.rectangle[2]])
         self._visualize_spectral_data()
 
     @staticmethod
     def _closest_point(array_coord, point):
         diff = array_coord - point
-        return np.argmin(diff[:,0]**2 + diff[:,1]**2)
+        return np.argmin(diff[:, 0]**2 + diff[:, 1]**2)
 
 
-def create_color_bar(axis: Axes, fig: Figure,
-                     ax_img: AxesImage, dset: sidpy.sid.Dataset):
-    """Add a colorbar to a created AxesImage, with data from dset."""
+def create_color_axes(axis: Axes) -> Axes:
+    """Create an axes for a color bar."""
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     divider = make_axes_locatable(axis)
     cax = divider.append_axes("right", size="5%", pad=0.05)
+    return cax
+
+
+def create_color_bar(cax: Axes, fig: Figure,
+                     ax_img: AxesImage, dset: sidpy.sid.Dataset
+                     ) -> Colorbar:
+    """Add a colorbar to a created Axes.
+
+    Do so based on an AxesImage, with labeling from a dset.
+
+    """
     cbar = fig.colorbar(ax_img, cax=cax)
     cbar.set_label(dset.data_descriptor)
+    return cbar
+
+
+def update_color_bar(cax: Axes, fig: Figure,
+                     ax_img: AxesImage, dset: sidpy.sid.Dataset,
+                     ) -> Colorbar:
+    """Update the colorbar with latest data."""
+    cax.cla()
+    return create_color_bar(cax, fig, ax_img, dset)
 
 
 def create_scale_bar(axis: Axes, extent_rd: list[float],
