@@ -159,7 +159,7 @@ def init_logging(log_level_str: str):
     logger.addHandler(handler)
 
 
-def cli_spectral_slice_viz(filepath: str, spectra_key: str,
+def cli_spectral_slice_viz(filepath: str, spectra_key: str = BIAS_KEY,
                            log_level: str = 'INFO', **kwargs):
     """Load ARHDF5 file, visualize spectra using SpectralSliceStackVisualizer.
 
@@ -188,9 +188,9 @@ def cli_spectral_slice_viz(filepath: str, spectra_key: str,
 
     Args:
         filepath: full path of filename to load.
-        log_level: log level as string.
+        log_level: log level as string. Default is 'INFO'.
         spectra_key: dataset key we will use to show the spectrum (for choosing
-            the spectrum index).
+            the spectrum index). Default is 'Bias'.
 
     """
     init_logging(log_level)
