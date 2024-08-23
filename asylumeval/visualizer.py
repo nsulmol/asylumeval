@@ -372,7 +372,7 @@ class SpectraStackVisualizer(object):
         if show_color_bar:
             if cax is None:
                 cax = create_color_axes(axis)
-                create_color_bar(axis, fig, ax_img, dset)
+                create_color_bar(cax, fig, ax_img, dset)
             else:
                 update_color_bar(cax, fig, ax_img, dset)
         if show_scale_bar:
@@ -436,7 +436,6 @@ class SpectraStackVisualizer(object):
                 self.energy_axes, self.energy_scales):
             self._visualize_spectrum(axis, dset, energy_axis, energy_scale,
                                      **self.kwargs)
-        # self.fig.tight_layout()
 
     def _visualize_spectrum(self, axis: Axes, dset: sidpy.sid.Dataset,
                             energy_axis: int, energy_scale: np.array,
@@ -531,6 +530,7 @@ class SpectraStackVisualizer(object):
         if event.inaxes == self.axes[0]:
             self._update_rect(event.xdata, event.ydata)
             self._visualize_spectral_data()
+            #self.fig.tight_layout()
             self.fig.canvas.draw_idle()
 
     def _update_rect(self, x: float, y: float):
