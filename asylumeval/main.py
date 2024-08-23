@@ -176,9 +176,13 @@ def cli_load_and_visualize(filepath: str, log_level: str = 'INFO',
 
     maps = create_dset_map_from_arhdf5_file(filepath)
 
-    maps = compute_relationships(maps)
+    eval_maps = compute_relationships(maps)
 
-    viz = visualizer.ExperimentVisualizer(list(maps.values()), **kwargs)
+#    spectra_idx = 3
+
+#    viz = visualizer.SpectraStackVisualizer(list(maps.values()), **kwargs)
+    viz = visualizer.SpectralSliceStackVisualizer(
+        maps, BIAS_KEY, **kwargs)
     plt.show(block=True)
 
 

@@ -52,10 +52,11 @@ class SpectraStackVisualizer(object):
             associated colorbar, it should be None.
     """
 
-    def __init__(self, dsets: list[sidpy.sid.Dataset], figure=None,
+    def __init__(self, dsets_map: dict[str, sidpy.sid.Dataset], figure=None,
                  horizontal=False, fancy_grid=True,
                  plots_per_row=PLOTS_PER_ROW, **kwargs):
         """Initialize our object."""
+        dsets = list(dsets_map.values())
         dset_img_shape = dsets[0].shape[0:2]
         dset_ndim = dsets[0].ndim
         for dset in dsets:
@@ -655,3 +656,124 @@ def create_scale_bar(axis: Axes, extent_rd: list[float],
                                size_vertical=size_of_bar / 7)
 
     axis.add_artist(scalebar)
+
+
+class SpectralSliceStackVisualizer(SpectraStackVisualizer):
+    """Visualize 2D maps of slices of spectroscopic data.
+
+    Given a list of spectra taken on a 2D surface, this visualizer will
+    display an image stack of the spectra, where each image contains a
+    spectra's values a one particular index of the spectrum, for all x/y values
+    in physical space.
+
+    Attributes:
+        fig: the figure we are drawing on.
+        image_dims: the image dimensions.
+        energy_axes: the axes of each spectroscopic dataset.
+        dsets: the list of sidpy.sid.Datasets we are visualizing.
+        dset: the first dataset, used for ease of reusing existing code.
+        spectra_viz_idx: the idx of the dataset whose spectra we visualize,
+            used to select the spectrum index (for topographic slices).
+        spectrum_idx: the index of the spectral dimension which we are
+            visualizing via topograhic slices.
+        spectra_bin_size: size of binning of spectral 'slice', used to
+            perform a mean() over the data. Default is 1
+        horizontal: whether we want to visualize the plots 'horizontally',
+            or 'vertically'. Modifies rows and cols.
+        x: topographic x-position of the spectra we are currently visualizing.
+        y: topographic y-position of the spectra we are currently visualizing.
+        bin_x: binning amount, used to downsample (I think).
+        bin_y: binning amount, used to downsample (I think).
+        line_scan: I'm not sure what this is, from original code.
+        axes: the (flattened) list of Axes corresponding to the image and
+            spectroscopic data we are visualizing.
+        caxes: a list of Axes for colorbars, where the index should be
+            associated to that in self.axes. If an Axes does not have an
+            associated colorbar, it should be None.
+    """
+
+    def __init__(self, dsets_map: dict[str, sidpy.sid.Dataset],
+                 spectra_viz_key: str, spectra_bin_size: int = 1,
+                 figure=None, horizontal=False, plots_per_row=PLOTS_PER_ROW,
+                 **kwargs):
+        """Initialize our object."""
+        self.dsets = list(dsets_map.values())
+        self.spectra_viz_idx = [idx for idx, key in enumerate(dsets_map.keys())
+                                if key == spectra_viz_key][0]
+
+        self.show_color_bar = kwargs.get('color_bar', False)
+        self.show_scale_bar = kwargs.get('scale_bar', False)
+
+        self.spectra_bin_size = spectra_bin_size
+        self.spectrum_idx = 0
+        self.line = None
+
+        # dsets = list(dsets.values())  # Switch to list of values
+        super().__init__(dsets_map, figure, horizontal, fancy_grid=True,
+                         plots_per_row=plots_per_row, **kwargs)
+
+    def _get_spectrum_indices(self, dset: sidpy.sid.dataset,
+                              energy_axis: int) -> list[int]:
+        half_size = int(0.5 * self.spectra_bin_size)
+        start_val = max(self.spectrum_idx - half_size, 0)
+        end_val = min(self.spectrum_idx + max(half_size, 1),
+                      dset.shape[energy_axis])
+        spectra_indices = list(range(start_val, end_val))
+        return spectra_indices
+
+    # @override
+    def _update_rect(self, x: float, y: float):
+        """override, update rect on spectral data."""
+        dset = self.dsets[self.spectra_viz_idx]
+        energy_axis = self.energy_axes[self.spectra_viz_idx]
+
+        self.spectrum_idx = np.abs(dset._axes[energy_axis].values - x).argmin()
+        self._draw_line()
+
+    def _draw_line(self):
+        """Draw the line, deleting prior (if needed)."""
+        if self.line is not None:
+            self.line.remove()
+
+        dset = self.dsets[self.spectra_viz_idx]
+        energy_axis = self.energy_axes[self.spectra_viz_idx]
+        x_val = dset._axes[energy_axis].values[self.spectrum_idx]
+        self.line = self.axes[0].axvline(x=x_val,
+                                         linewidth=self.spectra_bin_size,
+                                         color='red')
+
+    # @override
+    def set_selection_image(self, show_scale_bar: bool,
+                            show_color_bar: bool, **kwargs):
+        """Override, create clickable spectral visualization."""
+        super()._visualize_spectrum(
+            self.axes[0],
+            self.dsets[self.spectra_viz_idx],
+            self.energy_axes[self.spectra_viz_idx],
+            self.energy_scales[self.spectra_viz_idx])
+
+        self._draw_line()
+
+    # @override
+    def _visualize_spectral_data(self):
+        """Override, show spectral topography for each spectrum.
+
+        In this case, since we are displaying topographical maps, we
+        also update the internal caxes (if applicable).
+        """
+        new_caxes = []
+        for dset, axis, energy_axis, energy_scale, color_bar in zip(
+                self.dsets, self.axes[1:(1+len(self.dsets))],
+                self.energy_axes, self.energy_scales, self.caxes):
+
+            spectra_indices = self._get_spectrum_indices(dset,
+                                                         energy_axis)
+            new_caxes.append(self._visualize_spectral_topography(
+                axis, self.fig, dset, self.image_axes, self.extent,
+                self.extent_rd, energy_axis, self.show_scale_bar,
+                self.show_color_bar, color_bar, spectra_indices))
+        self.caxes = new_caxes
+
+    def set_bin_spectra(self, bin_spectra: int):
+        """Set spectral bin size."""
+        self.spectra_bin_size = bin_spectra
