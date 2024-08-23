@@ -196,7 +196,7 @@ def cli_spectral_slice_viz(filepath: str, spectra_key: str = BIAS_KEY,
     init_logging(log_level)
 
     maps = create_dset_map_from_arhdf5_file(filepath)
-    viz = visualizer.SpectralSliceStackVisualizer(maps, BIAS_KEY, **kwargs)
+    viz = visualizer.SpectralSliceStackVisualizer(maps, spectra_key, **kwargs)
     plt.show(block=True)
 
 
