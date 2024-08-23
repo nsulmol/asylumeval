@@ -44,6 +44,8 @@ class SpectraStackVisualizer(object):
         caxes: a list of Axes for colorbars, where the index should be
             associated to that in self.axes. If an Axes does not have an
             associated colorbar, it should be None.
+        kwargs: additional keyword arguments passed to the matplotlib
+            plot()/imshow() calls, based on the dataset title.
     """
 
     def __init__(self, dsets_map: dict[str, sidpy.sid.Dataset], figure=None,
@@ -71,6 +73,7 @@ class SpectraStackVisualizer(object):
             **kwargs: additional keyword arguments passed to the matplotlib
                 plot()/imshow() calls, based on the dataset title.
         """
+        self.kwargs = kwargs
         dsets = list(dsets_map.values())
         dset_img_shape = dsets[0].shape[0:2]
         dset_ndim = dsets[0].ndim
@@ -431,11 +434,13 @@ class SpectraStackVisualizer(object):
         for dset, axis, energy_axis, energy_scale in zip(
                 self.dsets, self.axes[1:(1+len(self.dsets))],
                 self.energy_axes, self.energy_scales):
-            self._visualize_spectrum(axis, dset, energy_axis, energy_scale)
+            self._visualize_spectrum(axis, dset, energy_axis, energy_scale,
+                                     **self.kwargs)
         # self.fig.tight_layout()
 
     def _visualize_spectrum(self, axis: Axes, dset: sidpy.sid.Dataset,
-                            energy_axis: int, energy_scale: np.array):
+                            energy_axis: int, energy_scale: np.array,
+                            **kwargs):
         """Set or update visualization of spectrum on provided axis.
 
         Args:
@@ -715,8 +720,7 @@ class SpectralSliceStackVisualizer(SpectraStackVisualizer):
             spectra_viz_key: the key of the dataset whose spectra we visualize,
                 used to select the spectrum idnex (for the topographic slices).
             spectra_bin_size: size of binning of spectral 'slice', used to
-                perform a mean() over the data. Default is 1
-
+                perform a mean() over the data. Default is 1.
             figure: the figure we are drawing on.
             horizontal: whether we want to visualize the plots 'horizontally',
                 or 'vertically'. Modifies rows and cols.
@@ -741,6 +745,9 @@ class SpectralSliceStackVisualizer(SpectraStackVisualizer):
         self.spectra_bin_size = spectra_bin_size
         self.spectrum_idx = 0
         self.line = None
+
+        self.show_scale_bar = scale_bar
+        self.show_color_bar = color_bar
 
         # dsets = list(dsets.values())  # Switch to list of values
         super().__init__(dsets_map, figure, horizontal, fancy_grid=True,
@@ -785,7 +792,8 @@ class SpectralSliceStackVisualizer(SpectraStackVisualizer):
             self.axes[0],
             self.dsets[self.spectra_viz_idx],
             self.energy_axes[self.spectra_viz_idx],
-            self.energy_scales[self.spectra_viz_idx])
+            self.energy_scales[self.spectra_viz_idx],
+            **kwargs)
 
         self._draw_line()
 
@@ -806,7 +814,8 @@ class SpectralSliceStackVisualizer(SpectraStackVisualizer):
             new_caxes.append(self._visualize_spectral_topography(
                 axis, self.fig, dset, self.image_axes, self.extent,
                 self.extent_rd, energy_axis, self.show_scale_bar,
-                self.show_color_bar, color_bar, spectra_indices))
+                self.show_color_bar, color_bar, spectra_indices,
+                **self.kwargs))
         self.caxes = new_caxes
 
     def set_bin_spectra(self, bin_spectra: int):

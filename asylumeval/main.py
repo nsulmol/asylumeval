@@ -168,6 +168,9 @@ def cli_spectral_slice_viz(filepath: str, spectra_key: str,
     'Deflection' channels, and visualizes them all in one UI.
 
     Keyword Args:
+        figure: the figure we are drawing on.
+        spectra_bin_size: size of binning of spectral 'slice', used to
+            perform a mean() over the data. Default is 1.
         horizontal: whether we want to visualize the plots 'horizontally',
             or 'vertically'. Modifies rows and cols.
         fancy_grid: whether or not we use our 'fancier' Axes splitting to
