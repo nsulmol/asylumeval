@@ -188,9 +188,9 @@ def cli_spectral_slice_viz(filepath: str, spectra_key: str = BIAS_KEY,
 
     Args:
         filepath: full path of filename to load.
-        log_level: log level as string. Default is 'INFO'.
+        log_level: log level as string.
         spectra_key: dataset key we will use to show the spectrum (for choosing
-            the spectrum index). Default is 'Bias'.
+            the spectrum index).
 
     """
     init_logging(log_level)
