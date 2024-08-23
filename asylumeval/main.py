@@ -159,32 +159,80 @@ def init_logging(log_level_str: str):
     logger.addHandler(handler)
 
 
-def cli_load_and_visualize(filepath: str, log_level: str = 'INFO',
-                           **kwargs):
-    """Load ARHDF5 file and visualize spectra.
+def cli_spectral_slice_viz(filepath: str, spectra_key: str,
+                           log_level: str = 'INFO', **kwargs):
+    """Load ARHDF5 file, visualize spectra using SpectralSliceStackVisualizer.
 
     This method assumes the ARHDF5 file consists of a list of spectral datasets
     which have been collected over a 2D image. It loads them, normalizes the
     'Deflection' channels, and visualizes them all in one UI.
 
+    Keyword Args:
+        horizontal: whether we want to visualize the plots 'horizontally',
+            or 'vertically'. Modifies rows and cols.
+        fancy_grid: whether or not we use our 'fancier' Axes splitting to
+            focus on the topographic data over the spectral.
+        plots_per_row: how many plots we show in each row.
+        scale_bar: whether or not we show x/y axis scale using a microscopy
+            style scale bar (with units) in the image. If False, we show
+            the individual axes with labels and units, like a standard
+            plot.
+        color_bar: whether or not we show a color_bar on the side for the
+            topographic data.
+        set_title: whether orn ot we write a title for the figure.
+        **kwargs: additional keyword arguments passed to the matplotlib
+            plot()/imshow() calls, based on the dataset title.
+
     Args:
         filepath: full path of filename to load.
         log_level: log level as string.
+        spectra_key: dataset key we will use to show the spectrum (for choosing
+            the spectrum index).
+
     """
-    #plt.ion()  # for interactive usage
     init_logging(log_level)
 
     maps = create_dset_map_from_arhdf5_file(filepath)
+    viz = visualizer.SpectralSliceStackVisualizer(maps, BIAS_KEY, **kwargs)
+    plt.show(block=True)
 
-    eval_maps = compute_relationships(maps)
 
-#    spectra_idx = 3
+def cli_spectral_stack_viz(filepath: str, log_level: str = 'INFO', **kwargs):
+    """Load ARHDF5 file, visualize spectra sing SpectraStackVisualizer.
 
-#    viz = visualizer.SpectraStackVisualizer(list(maps.values()), **kwargs)
-    viz = visualizer.SpectralSliceStackVisualizer(
-        maps, BIAS_KEY, **kwargs)
+    This method assumes the ARHDF5 file consists of a list of spectral datasets
+    which have been collected over a 2D image. It loads them, normalizes the
+    'Deflection' channels, and visualizes them all in one UI.
+
+    Keyword Args:
+        horizontal: whether we want to visualize the plots 'horizontally',
+            or 'vertically'. Modifies rows and cols.
+        fancy_grid: whether or not we use our 'fancier' Axes splitting to
+            focus on the topographic data over the spectral.
+        plots_per_row: how many plots we show in each row.
+        scale_bar: whether or not we show x/y axis scale using a microscopy
+            style scale bar (with units) in the image. If False, we show
+            the individual axes with labels and units, like a standard
+            plot.
+        color_bar: whether or not we show a color_bar on the side for the
+            topographic data.
+        set_title: whether orn ot we write a title for the figure.
+        **kwargs: additional keyword arguments passed to the matplotlib
+            plot()/imshow() calls, based on the dataset title.
+
+    Args:
+        filepath: full path of filename to load.
+        log_level: log level as string.
+
+    """
+    init_logging(log_level)
+
+    maps = create_dset_map_from_arhdf5_file(filepath)
+    viz = visualizer.SpectraStackVisualizer(maps, **kwargs)
     plt.show(block=True)
 
 
 if __name__ == '__main__':
-    fire.Fire(cli_load_and_visualize)
+    fire.Fire({
+        'slice': cli_spectral_slice_viz,
+        'stack': cli_spectral_stack_viz})

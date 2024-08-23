@@ -25,12 +25,6 @@ class SpectraStackVisualizer(object):
 
     This was hacked up based on sidpy's SpectraImageVisualizer.
 
-    Special kwargs:
-    - 'scale_bar=True' is supposed to visualize the scale data with a microscopy-like
-        scale bar (with units) in the image. I'm not sure the scale is right
-        currently...
-    - 'color_bar=True' will add a colorbar to the topographic graphs.
-
     Attributes:
         fig: the figure we are drawing on.
         image_axes: the axis ids for the image dimensions.
@@ -54,8 +48,29 @@ class SpectraStackVisualizer(object):
 
     def __init__(self, dsets_map: dict[str, sidpy.sid.Dataset], figure=None,
                  horizontal=False, fancy_grid=True,
-                 plots_per_row=PLOTS_PER_ROW, **kwargs):
-        """Initialize our object."""
+                 plots_per_row=PLOTS_PER_ROW,
+                 scale_bar: bool = True, color_bar: bool = True,
+                 set_title: bool = True, **kwargs):
+        """Initialize our object.
+
+        Args:
+            dsets_map: dictionary of datasets.
+            figure: the figure we are drawing on.
+            horizontal: whether we want to visualize the plots 'horizontally',
+                or 'vertically'. Modifies rows and cols.
+            fancy_grid: whether or not we use our 'fancier' Axes splitting to
+                focus on the topographic data over the spectral.
+            plots_per_row: how many plots we show in each row.
+            scale_bar: whether or not we show x/y axis scale using a microscopy
+                style scale bar (with units) in the image. If False, we show
+                the individual axes with labels and units, like a standard
+                plot.
+            color_bar: whether or not we show a color_bar on the side for the
+                topographic data.
+            set_title: whether orn ot we write a title for the figure.
+            **kwargs: additional keyword arguments passed to the matplotlib
+                plot()/imshow() calls, based on the dataset title.
+        """
         dsets = list(dsets_map.values())
         dset_img_shape = dsets[0].shape[0:2]
         dset_ndim = dsets[0].ndim
@@ -66,10 +81,6 @@ class SpectraStackVisualizer(object):
                 raise TypeError('all dsets must have same image shape')
             elif dset.ndim != dset_ndim:
                 raise TypeError('all dsets must have same image dimensions')
-
-        show_color_bar = kwargs.pop('color_bar', False)
-        show_scale_bar = kwargs.pop('scale_bar', False)
-        self.set_title = kwargs.pop('set_title', True)
 
         fig_args = dict()
         temp = kwargs.pop('figsize', None)
@@ -101,10 +112,10 @@ class SpectraStackVisualizer(object):
                                       **fig_args)
         self.caxes = [None] * len(self.axes)
 
-        if self.set_title:
+        if set_title:
             self.fig.canvas.manager.set_window_title(self.dset.title)
 
-        self.set_selection_image(show_scale_bar, show_color_bar, **kwargs)
+        self.set_selection_image(scale_bar, color_bar, **kwargs)
         self._visualize_spectral_data()
 
         # Hookup callback for clicking on GUI (need to update spectra)
@@ -695,14 +706,37 @@ class SpectralSliceStackVisualizer(SpectraStackVisualizer):
     def __init__(self, dsets_map: dict[str, sidpy.sid.Dataset],
                  spectra_viz_key: str, spectra_bin_size: int = 1,
                  figure=None, horizontal=False, plots_per_row=PLOTS_PER_ROW,
-                 **kwargs):
-        """Initialize our object."""
+                 scale_bar: bool = True, color_bar: bool = True,
+                 set_title: bool = True, **kwargs):
+        """Initialize our object.
+
+        Args:
+            dsets_map: dictionary of datasets.
+            spectra_viz_key: the key of the dataset whose spectra we visualize,
+                used to select the spectrum idnex (for the topographic slices).
+            spectra_bin_size: size of binning of spectral 'slice', used to
+                perform a mean() over the data. Default is 1
+
+            figure: the figure we are drawing on.
+            horizontal: whether we want to visualize the plots 'horizontally',
+                or 'vertically'. Modifies rows and cols.
+            fancy_grid: whether or not we use our 'fancier' Axes splitting to
+                focus on the topographic data over the spectral.
+            plots_per_row: how many plots we show in each row.
+            scale_bar: whether or not we show x/y axis scale using a microscopy
+                style scale bar (with units) in the image. If False, we show
+                the individual axes with labels and units, like a standard
+                plot.
+            color_bar: whether or not we show a color_bar on the side for the
+                topographic data.
+            set_title: whether orn ot we write a title for the figure.
+            **kwargs: additional keyword arguments passed to the matplotlib
+                plot()/imshow() calls, based on the dataset title.
+        """
+
         self.dsets = list(dsets_map.values())
         self.spectra_viz_idx = [idx for idx, key in enumerate(dsets_map.keys())
                                 if key == spectra_viz_key][0]
-
-        self.show_color_bar = kwargs.get('color_bar', False)
-        self.show_scale_bar = kwargs.get('scale_bar', False)
 
         self.spectra_bin_size = spectra_bin_size
         self.spectrum_idx = 0
@@ -710,7 +744,8 @@ class SpectralSliceStackVisualizer(SpectraStackVisualizer):
 
         # dsets = list(dsets.values())  # Switch to list of values
         super().__init__(dsets_map, figure, horizontal, fancy_grid=True,
-                         plots_per_row=plots_per_row, **kwargs)
+                         plots_per_row=plots_per_row, scale_bar=scale_bar,
+                         color_bar=color_bar, set_title=set_title, **kwargs)
 
     def _get_spectrum_indices(self, dset: sidpy.sid.dataset,
                               energy_axis: int) -> list[int]:
