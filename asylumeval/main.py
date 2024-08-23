@@ -232,7 +232,12 @@ def cli_spectral_stack_viz(filepath: str, log_level: str = 'INFO', **kwargs):
     plt.show(block=True)
 
 
-if __name__ == '__main__':
+def cli():
+    """Wrapper to allow script call with pyproject."""
     fire.Fire({
         'slice': cli_spectral_slice_viz,
         'stack': cli_spectral_stack_viz})
+
+
+if __name__ == '__main__':
+    cli()

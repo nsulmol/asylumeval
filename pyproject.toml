@@ -19,3 +19,6 @@ colorlog = "^6.8.2"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+visualize = "asylumeval.main:cli"
