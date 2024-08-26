@@ -1,6 +1,6 @@
 # README
 
-  This repository contains scripts for evaluating and visualizing the spectroscopic data collected by Nata. It assumes that the Asylum Research spectroscopic data has been converted to HDF5 ([ARDF-to-HDF5 Converter][https://support.asylumresearch.com/forum/asylum-research-afm/diy-programming/3003-ardf-to-hdf5-converter-for-fast-force-mapping-ffm-data]), so the used readers can function.
+  This repository contains scripts for evaluating and visualizing the spectroscopic data collected by Nata. It assumes that the Asylum Research spectroscopic data has been converted to HDF5 ([ARDF-to-HDF5 Converter](https://support.asylumresearch.com/forum/asylum-research-afm/diy-programming/3003-ardf-to-hdf5-converter-for-fast-force-mapping-ffm-data)), so the used readers can function.
 
 ## Installation
 
